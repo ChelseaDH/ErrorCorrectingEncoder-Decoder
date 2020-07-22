@@ -17,6 +17,7 @@ public class Main {
 //        System.out.println();
 
         // ENCODE MODE
+        System.out.println("ENCODE MODE\n");
         // Create a new file reader to read the file
         try {
             inputStream = new FileInputStream("send.txt");
@@ -33,7 +34,7 @@ public class Main {
         System.out.println("send.txt:");
         printText(bytes);
         printHex(bytes);
-        printBin(bytes, "hex view", true);
+        printBin(bytes, "bin view", true);
         System.out.println();
 
         // Encode the text
@@ -76,9 +77,10 @@ public class Main {
         System.out.println();
 
         // SEND MODE
+        System.out.println("SEND MODE\n");
         // Open the encoded text
         try {
-            inputStream = new FileInputStream("send.txt");
+            inputStream = new FileInputStream("encoded.txt");
         } catch (FileNotFoundException e) {
             System.out.println("Error: File not found");
             System.exit(1);
@@ -86,6 +88,7 @@ public class Main {
 
         // Grab data from input
         bytes = inputStream.readAllBytes();
+        inputStream.close();
 
         // Print to the console
         System.out.println("encoded.txt:");
@@ -98,14 +101,11 @@ public class Main {
         outputStream = new FileOutputStream("received.txt");
         // Iterate through the input
         // Complete a bit shift based on a random int
-        // Add the resulting byte to the list
-        int byteAsInt = inputStream.read();
-        while (byteAsInt != -1) {
+        // Add the resulting byte to the file
+        for (byte b : bytes) {
             int shift = 1 << r.nextInt(8);
-            outputStream.write((byte) (byteAsInt ^ shift));
-            byteAsInt = inputStream.read();
+            outputStream.write(b ^ shift);
         }
-        inputStream.close();
         outputStream.close();
 
         // Open the received to print values
@@ -119,6 +119,120 @@ public class Main {
         System.out.println("received.txt");
         printBin(bytes, "bin view", true);
         printHex(bytes);
+        System.out.println();
+
+        // DECODE MODE
+        System.out.println("DECODE MODE\n");
+        // Open the received text
+        try {
+            inputStream = new FileInputStream("received.txt");
+        } catch (FileNotFoundException e) {
+            System.out.println("Error: File not found");
+            System.exit(1);
+        }
+
+        // Grab data from input
+        bytes = inputStream.readAllBytes();
+        inputStream.close();
+
+        // Print to the console
+        System.out.println("received.txt:");
+        printHex(bytes);
+        printBin(bytes, "bin view", true);
+        System.out.println();
+
+        // Correct the error in each byte
+        byte[] corrected = new byte[bytes.length];
+
+        for (int byteIndex = 0; byteIndex < bytes.length; byteIndex++) {
+
+            byte[] bits = new byte[8];
+
+            // Obtain the individual bits
+            for (int j = 0; j < 8; j++) {
+                bits[j] = (byte) ((bytes[byteIndex] >> (7 - j)) & 1);
+            }
+
+            // Check each pair for the error and correct it
+            int pairNo = 1;
+            for (int j = 0; j < 8; j += 2) {
+                if ((bits[j] ^ bits[j + 1]) == 1 && pairNo < 4) {
+                    byte correctBit = 0;
+                    switch (pairNo) {
+                        case 1:
+                            correctBit = correctPair(bits[7], bits[3], bits[5]);
+                            break;
+                        case 2:
+                            correctBit = correctPair(bits[7], bits[1], bits[5]);
+                            break;
+                        case 3:
+                            correctBit = correctPair(bits[7], bits[1], bits[3]);
+                            break;
+                    }
+                    bits[j] = correctBit;
+                    bits[j + 1] = correctBit;
+                    break;
+                }
+                pairNo++;
+            }
+
+            // Put the byte back together in corrected
+            int correctedByte = 0;
+            for (int j = 0; j < 8; j++) {
+                correctedByte = correctedByte | (bits[j] << (7 - j));
+            }
+
+            corrected[byteIndex] = (byte) correctedByte;
+        }
+
+        // Decode
+        byte[] decoded = new byte[((corrected.length * 3) / 8) + 1];
+        byte[] bits = new byte[(corrected.length * 3)];
+
+        bitNo = 0;
+
+        // For each correct byte isolate the 1st, 3rd and 5th bit
+        for (byte b: corrected) {
+            // 1st bit
+            bits[bitNo] = (byte) ((b >> 7) & 1);
+            bitNo++;
+
+            // 3rd bit
+            bits[bitNo] = (byte) ((b >> 5) & 1);
+            bitNo++;
+
+            // 5th bit
+            bits[bitNo] = (byte) ((b >> 3) & 1);
+            bitNo++;
+        }
+
+        // Correlate the bits into bytes
+        for (bitCounter = 0; bitCounter < bits.length; bitCounter++) {
+            byteNo = bitCounter / 8;
+            bitNo = bitCounter % 8;
+
+            if (byteNo < decoded.length) {
+                decoded[byteNo] = (byte) (decoded[byteNo] | (bits[bitCounter] << (7 - bitNo)));
+            }
+        }
+
+        outputStream = new FileOutputStream("decoded.txt");
+
+        byte[] removed = new byte[(corrected.length * 3) / 8];
+        for (byteNo = 0; byteNo < removed.length; byteNo++) {
+            removed[byteNo] = decoded[byteNo];
+            outputStream.write(removed[byteNo]);
+        }
+        outputStream.close();
+
+        // Print to the console
+        System.out.println("decoded.txt");
+        printBin(corrected, "correct", true);
+        printBin(decoded, "decode", true);
+        printBin(removed, "remove", true);
+        printHex(removed);
+        printText(removed);
+
     }
 
     public static void printText(byte[] input) {
@@ -153,5 +267,13 @@ public class Main {
 
     private static String IntAsBinExpanded(int input) {
         return IntAsBin(input).replaceAll("(.{6})..", "$1..");
+    }
+
+    private static byte correctPair (int parity, int a, int b){
+        if ((parity == 0 && (a == 1 ^ b == 1)) || (parity == 1 && (a == b))) {
+            return 1;
+        }
+
+        return 0;
     }
 }
