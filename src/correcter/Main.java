@@ -49,7 +49,6 @@ public class Main {
                 printBin(encoded, "expand", false);
                 printBin(encoded, "parity", true);
                 printHex(encoded);
-                System.out.println();
                 break;
 
             case "send":
@@ -83,7 +82,6 @@ public class Main {
                 System.out.println("received.txt");
                 printBin(bytes, "bin view", true);
                 printHex(bytes);
-                System.out.println();
                 break;
 
             case "decode":
@@ -222,7 +220,7 @@ public class Main {
         // Encode the text
         int bitCounter = 0;
         int numberOfBits = bytes.length * 8;
-        byte[] encoded = new byte[(numberOfBits / 3) + (numberOfBits % 3) - 1];
+        byte[] encoded = new byte[(int) Math.ceil(numberOfBits / 3.0)];
 
         int[] currentBits;
 
@@ -252,24 +250,25 @@ public class Main {
 
     public static void printHex(byte[] input) {
         System.out.print("hex view: ");
-        for (byte b : input) {
-            System.out.printf("%02X ", b);
+        for (int i = 0; i < input.length - 1; i++) {
+            System.out.printf("%02X ", input[i]);
         }
-        System.out.println();
+        System.out.printf("%02X\n", input[input.length - 1]);
     }
 
     public static void printBin(byte[] input, String flag, boolean full) {
         System.out.printf("%s: ", flag);
         if (full) {
-            for (byte b : input) {
-                System.out.print(IntAsBin(b) + " ");
+            for (int i = 0; i < input.length - 1; i++) {
+                System.out.printf("%s ", IntAsBin(input[i]));
             }
+            System.out.printf("%s\n", IntAsBin(input[input.length - 1]));
         } else {
-            for (byte b : input) {
-                System.out.print(IntAsBinExpanded(b) + " ");
+            for (int i = 0; i < input.length - 1; i++) {
+                System.out.printf("%s ", IntAsBinExpanded(input[i]));
             }
+            System.out.printf("%s\n", IntAsBinExpanded(input[input.length - 1]));
         }
-        System.out.println();
     }
 
     private static String IntAsBin(int input) {
