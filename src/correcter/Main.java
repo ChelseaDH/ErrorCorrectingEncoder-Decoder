@@ -100,13 +100,9 @@ public class Main {
                 byte[] corrected = correct(bytes);
                 byte[] decoded = decode(corrected);
 
+                // Open file to write the decoded bytes to
                 outputStream = new FileOutputStream("decoded.txt");
-
-                byte[] removed = new byte[(corrected.length * 3) / 8];
-                for (int byteNo = 0; byteNo < removed.length; byteNo++) {
-                    removed[byteNo] = decoded[byteNo];
-                    outputStream.write(removed[byteNo]);
-                }
+                outputStream.write(decoded);
                 outputStream.close();
 
                 // Print to the console
@@ -118,44 +114,45 @@ public class Main {
                 System.out.println("decoded.txt");
                 printBin(corrected, "correct", true);
                 printBin(decoded, "decode", true);
-                printBin(removed, "remove", true);
-                printHex(removed);
-                printText(removed);
+                printHex(decoded);
+                printText(decoded);
                 break;
         }
     }
 
-    private static byte[] decode(byte[] corrected) {
-        byte[] decoded = new byte[((corrected.length * 3) / 8) + 1];
-        byte[] bits = new byte[(corrected.length * 3)];
+    private static byte[] encode(byte[] bytes) {
+        // Implement Hamming code [7,4]
+        int numberOfBits = bytes.length * 8;
+        byte[] encoded = new byte[bytes.length * 2];
 
-        int bitNo = 0;
+        int[] currentBits;
 
-        // For each correct byte isolate the 1st, 3rd and 5th bit
-        for (byte b : corrected) {
-            // 1st bit
-            bits[bitNo] = (byte) ((b >> 7) & 1);
-            bitNo++;
+        int byteNo, bitNo;
 
-            // 3rd bit
-            bits[bitNo] = (byte) ((b >> 5) & 1);
-            bitNo++;
+        for (int bitCounter = 0; bitCounter < numberOfBits; bitCounter += 4) {
+            currentBits = new int[]{0, 0, 0, 0};
+            for (int i = 0; i < 4; i++) {
+                byteNo = (bitCounter + i) / 8;
+                bitNo = (bitCounter + i) % 8;
 
-            // 5th bit
-            bits[bitNo] = (byte) ((b >> 3) & 1);
-            bitNo++;
-        }
-
-        // Correlate the bits into bytes
-        for (int bitCounter = 0; bitCounter < bits.length; bitCounter++) {
-            int byteNo = bitCounter / 8;
-            bitNo = bitCounter % 8;
-
-            if (byteNo < decoded.length) {
-                decoded[byteNo] = (byte) (decoded[byteNo] | (bits[bitCounter] << (7 - bitNo)));
+                if (byteNo < bytes.length) {
+                    currentBits[i] = (bytes[byteNo] >> (7 - bitNo)) & 1;
+                }
             }
+
+            // Calculate parities
+            // parity = 1 => odd number of 1s in input
+            // parity = 0 => even number of 1s in input
+            int parity1 = calculateParity(currentBits[0], currentBits[1], currentBits[3]);
+            int parity2 = calculateParity(currentBits[0], currentBits[2], currentBits[3]);
+            int parity3 = calculateParity(currentBits[1], currentBits[2], currentBits[3]);
+
+            int newByte = (parity1 << 7 | parity2 << 6 | currentBits[0] << 5 | parity3 << 4
+                    | currentBits[1] << 3 | currentBits[2] << 2 | currentBits[3] << 1);
+
+            encoded[bitCounter / 4] = (byte) newByte;
         }
-        return decoded;
+        return encoded;
     }
 
     private static byte[] correct(byte[] bytes) {
@@ -171,28 +168,18 @@ public class Main {
                 bits[j] = (byte) ((bytes[byteIndex] >> (7 - j)) & 1);
             }
 
-            // Check each pair for the error and correct it
-            int pairNo = 1;
-            for (int j = 0; j < 8; j += 2) {
-                if ((bits[j] ^ bits[j + 1]) == 1 && pairNo < 4) {
-                    byte correctBit = 0;
-                    switch (pairNo) {
-                        case 1:
-                            correctBit = correctPair(bits[7], bits[3], bits[5]);
-                            break;
-                        case 2:
-                            correctBit = correctPair(bits[7], bits[1], bits[5]);
-                            break;
-                        case 3:
-                            correctBit = correctPair(bits[7], bits[1], bits[3]);
-                            break;
-                    }
-                    bits[j] = correctBit;
-                    bits[j + 1] = correctBit;
-                    break;
-                }
-                pairNo++;
-            }
+            // Check if parity bits are correct
+            boolean[] isParityCorrect = new boolean[3];
+            isParityCorrect[0] = checkParity(bits[2], bits[4], bits[6], bits[0]);
+            isParityCorrect[1] = checkParity(bits[2], bits[5], bits[6], bits[1]);
+            isParityCorrect[2] = checkParity(bits[4], bits[5], bits[6], bits[3]);
+
+            // Find number of errors
+            int noErrors = countFalse(isParityCorrect);
+
+            // Find index of the error and correct it
+            int errorIndex = findErrorIndex(isParityCorrect, noErrors);
+            bits[errorIndex] ^= 1;
 
             // Put the byte back together in corrected
             int correctedByte = 0;
@@ -205,6 +192,85 @@ public class Main {
         return corrected;
     }
 
+    private static int calculateParity(int a, int b, int c) {
+        if ((a + b + c) % 2 == 0) {
+            return 0;
+        } else {
+            return 1;
+        }
+    }
+
+    private static boolean checkParity(int a, int b, int c, int parity) {
+        return calculateParity(a, b, c) == parity;
+    }
+
+    private static int countFalse(boolean[] bools) {
+        int noFalse = 0;
+
+        for (boolean b: bools) {
+            if (!b) {
+                noFalse++;
+            }
+        }
+
+        return noFalse;
+    }
+
+    private static int findErrorIndex(boolean[] bools, int noErrors) {
+        switch (noErrors) {
+            case 0:
+                return 7;
+            case 1:
+                if (!bools[0]) {return 0;}
+                if (!bools[1]) {return 1;}
+                if (!bools[2]) {return 3;}
+            case 2:
+                if (bools[0] == bools[1]) {return 2;}
+                if (bools[0] == bools[2]) {return 4;}
+                if (bools[1] == bools[2]) {return 5;}
+            case 3:
+                return 6;
+        }
+        return -1;
+    }
+
+    private static byte[] decode(byte[] corrected) {
+        byte[] decoded = new byte[corrected.length / 2];
+        byte[] bits = new byte[(corrected.length * 4)];
+
+        int bitNo = 0;
+
+        // For each correct byte isolate the 3rd, 5th, 6th and 7th bit
+        for (byte b : corrected) {
+            // 3rd bit
+            bits[bitNo] = (byte) ((b >> 5) & 1);
+            bitNo++;
+
+            // 5th bit
+            bits[bitNo] = (byte) ((b >> 3) & 1);
+            bitNo++;
+
+            // 6th bit
+            bits[bitNo] = (byte) ((b >> 2) & 1);
+            bitNo++;
+
+            // 7th bit
+            bits[bitNo] = (byte) ((b >> 1) & 1);
+            bitNo++;
+        }
+
+        // Correlate the bits into bytes
+        for (int bitCounter = 0; bitCounter < bits.length; bitCounter++) {
+            int byteNo = bitCounter / 8;
+            bitNo = bitCounter % 8;
+
+            if (byteNo < decoded.length) {
+                decoded[byteNo] = (byte) (decoded[byteNo] | (bits[bitCounter] << (7 - bitNo)));
+            }
+        }
+        return decoded;
+    }
+
     private static void addErrors(byte[] bytes) {
         Random r = new Random();
         // Iterate through the input
@@ -214,34 +280,6 @@ public class Main {
             int shift = 1 << r.nextInt(8);
             bytes[i] ^= shift;
         }
-    }
-
-    private static byte[] encode(byte[] bytes) {
-        // Encode the text
-        int bitCounter = 0;
-        int numberOfBits = bytes.length * 8;
-        byte[] encoded = new byte[(int) Math.ceil(numberOfBits / 3.0)];
-
-        int[] currentBits;
-
-        int byteNo, bitNo;
-        while (bitCounter < numberOfBits) {
-            currentBits = new int[]{0, 0, 0};
-            for (int i = 0; i < 3; i++) {
-                byteNo = (bitCounter + i) / 8;
-                bitNo = (bitCounter + i) % 8;
-
-                if (byteNo < bytes.length) {
-                    currentBits[i] = (bytes[byteNo] >> (7 - bitNo)) & 1;
-                }
-            }
-
-            int parity = currentBits[0] ^ currentBits[1] ^ currentBits[2];
-            int newByte = currentBits[0] << 7 | currentBits[1] << 5 | currentBits[2] << 3 | parity << 1;
-            encoded[bitCounter / 3] = (byte) (newByte | (newByte >> 1));
-            bitCounter += 3;
-        }
-        return encoded;
     }
 
     public static void printText(byte[] input) {
@@ -276,14 +314,6 @@ public class Main {
     }
 
     private static String IntAsBinExpanded(int input) {
-        return IntAsBin(input).replaceAll("(.{6})..", "$1..");
-    }
-
-    private static byte correctPair(int parity, int a, int b) {
-        if ((parity == 0 && (a == 1 ^ b == 1)) || (parity == 1 && (a == b))) {
-            return 1;
-        }
-
-        return 0;
+        return IntAsBin(input).replaceAll("..(.).(.{3}).", "..$1.$2.");
     }
 }
