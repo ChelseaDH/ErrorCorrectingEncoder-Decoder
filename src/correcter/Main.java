@@ -71,7 +71,7 @@ public class Main {
                 System.out.println();
 
                 // Add errors
-                addErrors(bytes);
+                Errors.addRandom(bytes);
 
                 // Open file to write the encoded bytes to
                 outputStream = new FileOutputStream("received.txt");
@@ -269,17 +269,6 @@ public class Main {
             }
         }
         return decoded;
-    }
-
-    private static void addErrors(byte[] bytes) {
-        Random r = new Random();
-        // Iterate through the input
-        // Complete a bit shift based on a random int
-        // Add the resulting byte to the file
-        for (int i = 0; i < bytes.length; i++) {
-            int shift = 1 << r.nextInt(8);
-            bytes[i] ^= shift;
-        }
     }
 
     public static void printText(byte[] input) {
