@@ -192,18 +192,6 @@ public class Main {
         return corrected;
     }
 
-    private static int calculateParity(int a, int b, int c) {
-        if ((a + b + c) % 2 == 0) {
-            return 0;
-        } else {
-            return 1;
-        }
-    }
-
-    private static boolean checkParity(int a, int b, int c, int parity) {
-        return calculateParity(a, b, c) == parity;
-    }
-
     private static int countFalse(boolean[] bools) {
         int noFalse = 0;
 
